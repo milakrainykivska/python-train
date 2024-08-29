@@ -8,6 +8,7 @@ from azure.identity import DefaultAzureCredential
 import urllib
 import pyodbc
 from azure.keyvault.secrets import SecretClient
+from sqlalchemy import create_engine
 
 # Configurable parameters
 API_BASE_URL = 'https://api.meteomatics.com'
@@ -44,19 +45,20 @@ def fetch_weather_data(url, username, password):
 
     return pd.DataFrame([weather_data])
 
-def write_df_to_sql(df, sql_server, sql_database, table_name):
-    """Writes a DataFrame to an MS SQL table using pyodbc."""
+def create_sql_engine(sql_server, sql_database):
+    """Creates and returns a SQLAlchemy engine."""
     connection_string = (
-        f'Driver={{ODBC Driver 17 for SQL Server}};'
-        f'Server={sql_server};'
-        f'Database={sql_database};'
-        'Trusted_Connection=yes;'
+        f"mssql+pyodbc:///?odbc_connect="
+        f"Driver={{ODBC Driver 17 for SQL Server}};"
+        f"Server={sql_server};"
+        f"Database={sql_database};"
+        f"Trusted_Connection=yes;"
     )
-    connection = pyodbc.connect(connection_string)
-    cursor = connection.cursor()
+    return create_engine(connection_string)
 
-    # Create table if it doesn't exist
-    cursor.execute(f"""
+def create_table_if_not_exists(engine, table_name):
+    """Creates the table if it doesn't exist in the database."""
+    create_table_query = f"""
         IF OBJECT_ID('{table_name}', 'U') IS NULL
         CREATE TABLE {table_name} (
             datetime DATETIME,
@@ -64,30 +66,26 @@ def write_df_to_sql(df, sql_server, sql_database, table_name):
             wind_speed FLOAT,
             precipitation FLOAT
         )
-    """)
-    connection.commit()
+    """
+    with engine.connect() as connection:
+        connection.execute(create_table_query)
 
-    # Insert DataFrame into the table
-    for index, row in df.iterrows():
-        cursor.execute(f"""
-            INSERT INTO {table_name} (datetime, temperature, wind_speed, precipitation)
-            VALUES (?, ?, ?, ?)
-        """, row['datetime'], row['temperature'], row['wind_speed'], row['precipitation'])
-    connection.commit()
-
-    cursor.close()
-    connection.close()
+def write_df_to_sql(df, engine, table_name):
+    """Writes a DataFrame to an MS SQL table using SQLAlchemy."""
+    try:
+        df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+        print(f"Data successfully written to {table_name} table.")
+    except SQLAlchemyError as e:
+        print(f"Error writing data to SQL: {e}")
 
 def main():
-    try:
-        df = fetch_weather_data(URL, USERNAME, PASSWORD)
-        print(df)
-        write_df_to_sql(df, SQL_SERVER, SQL_DATABASE, TABLE_NAME)
-        print(f"Data loaded into {TABLE_NAME} table in {SQL_DATABASE} database successfully.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    df = fetch_weather_data(URL, USERNAME, PASSWORD)
+    if not df.empty:
+        engine = create_sql_engine(SQL_SERVER, SQL_DATABASE)
+        create_table_if_not_exists(engine, TABLE_NAME)
+        write_df_to_sql(df, engine, TABLE_NAME)
+    else:
+        print("No data fetched, skipping database write.")
 
 if __name__ == "__main__":
     main()
-
-# 3 - We have to create a pipeline on Synapse with Daily trigger for exaple at 9:00 am or loading daily weather data and have up to date data all the time for futher analytics.
