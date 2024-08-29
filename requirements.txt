@@ -1,0 +1,5 @@
+requests==2.31.0
+pandas==2.0.3
+SQLAlchemy==2.0.19
+azure-identity==1.13.0
+pyodbc==4.0.35
