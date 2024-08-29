@@ -7,14 +7,21 @@ from datetime import datetime, timedelta
 from azure.identity import DefaultAzureCredential
 import urllib
 import pyodbc
+from azure.keyvault.secrets import SecretClient
 
 # Configurable parameters
 API_BASE_URL = 'https://api.meteomatics.com'
-USERNAME = 'gridd_krainykivska_mila'  # better to save in secret key
-PASSWORD = 'F8hBaz16SF'  # better to save in secret key
 SQL_SERVER = 'MSSQLServer'
 SQL_DATABASE = 'MSSQLDatabase'
 TABLE_NAME = 'weather_data'
+
+# Fetch secrets from Key Vault
+KEY_VAULT_NAME = "my-key-vault"
+KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net/"
+credential = DefaultAzureCredential()
+client = SecretClient(vault_url=KV_URI, credential=credential)
+USERNAME = client.get_secret("MeteomaticsUsername").value
+PASSWORD = client.get_secret("MeteomaticsPassword").value
 
 # Weather API parameters
 yesterday = (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
