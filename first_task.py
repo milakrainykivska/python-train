@@ -1,14 +1,5 @@
 #The goal of first task is loading weather data from open API to MS SQL Database
-# 1 - create table in MS SQL using script
-"""
-CREATE TABLE weather_data (
-    datetime DATETIME,
-    temperature FLOAT,
-    wind_speed FLOAT,
-    precipitation FLOAT
-);
-"""
-# 2 - create Synapse Notebook with next script:
+
 import requests
 import pandas as pd
 import sqlalchemy
